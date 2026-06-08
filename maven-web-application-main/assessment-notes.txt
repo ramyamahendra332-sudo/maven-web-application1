@@ -1,0 +1,118 @@
+==============================================================
+  MAVEN WEB APP - CI/CD PIPELINE CASE STUDY DELIVERABLES
+==============================================================
+Repo: https://github.com/jeevan0024/maven-web-application.git
+Stack: Java + Maven + SonarQube + Jenkins + Ansible + Tomcat + Docker
+
+==============================================================
+1. CI/CD ARCHITECTURE DIAGRAM
+==============================================================
+Below is the text-based representation of the CI/CD Architecture Flow:
+
+Developer (Pushes Code)
+   │
+   ▼
+GitHub Repository (jeevan0024/maven-web-application.git)
+   │
+   ▼ (Webhook / Poll SCM)
+Jenkins CI/CD Server (Orchestrator)
+   │
+   ├──► Stage 1: Source Code Checkout
+   │
+   ├──► Stage 2: SonarQube Static Code Analysis (Port 9000)
+   │             (Verifies: Bugs, Vulnerabilities, Code Smells)
+   │             ├─► [FAIL] ──► Abort Pipeline
+   │             └─► [PASS] ──► Proceed
+   │
+   ├──► Stage 3: Maven Build Stage
+   │             ├─► Packages WAR: target/maven-web-application.war
+   │             └─► Publishes artifact to Nexus Repository Manager
+   │
+   └──► Stage 4: Ansible Configuration Management
+                 (Orchestrates remote server tasks)
+                 │
+                 ├──► Stop Apache Tomcat (Port 8080)
+                 ├──► Deploy updated maven-web-application.war
+                 ├──► Start Apache Tomcat
+                 └──► Verify App Health (HTTP 200 check)
+
+Architecture Components Details:
+- Developer: Commits and pushes changes to GitHub.
+- GitHub Repo: Hosts the master and development branches.
+- Jenkins (CI/CD Server): Polls GitHub, schedules builds, runs the pipeline steps.
+- SonarQube (Quality Server): Performs static analysis to ensure code quality meets enterprise standards.
+- Maven (Build Tool): Handles compiling, running tests, and compiling the WAR file.
+- Nexus Repository: Serves as the binary repository for releasing build artifacts.
+- Ansible (Configuration Management): Performs automated, zero-touch deployment on the Tomcat server.
+- Tomcat Server (Application Server): Hosts and runs the Java web application servlet.
+
+==============================================================
+2. COMPLETE PIPELINE DESIGN
+==============================================================
+The pipeline is designed declaratively in the `Jenkinsfile` and contains:
+
+- Stage 1: Source Code Checkout (CheckOutCode)
+  - Connects to GitHub and checks out the master branch.
+  - Keeps build history and discards older logs (keeps last 5).
+  - Code:
+    git branch: 'main', url: 'https://github.com/jeevan0024/maven-web-application.git'
+
+- Stage 2: Static Code Analysis (SonarQube Analysis & Quality Gate)
+  - Submits analysis: `mvn clean sonar:sonar`
+  - Pauses to await validation status from SonarQube using:
+    waitForQualityGate abortPipeline: true
+  - If any gate rule fails (exceeding bugs/vulnerability limits), pipeline execution halts.
+
+- Stage 3: Application Build (Build)
+  - Packages the app using: `mvn clean package`
+  - Yields the packaged web archive: `target/maven-web-application.war`
+
+- Stage 4: Artifact Archival (Upload To Nexus)
+  - Publishes snapshot/release builds to remote Nexus Repository using: `mvn clean deploy`
+
+- Stage 5: Infrastructure Deployment (Deploy via Ansible)
+  - Invokes configuration management deployment:
+    ansible-playbook -i inventory appdeploy.yaml
+
+==============================================================
+3. TOOL INTEGRATION FLOW
+==============================================================
+1. GitHub ──► Jenkins: GitHub repository changes are automatically polled by Jenkins (`pollSCM`).
+2. Jenkins ──► SonarQube: Jenkins triggers the analysis, which scans files and queries the SonarQube server context at http://<SONAR-IP>:9000.
+3. Jenkins ──► Maven: Jenkins manages Maven dependencies to compile code and generate the WAR.
+4. Maven ──► Nexus: Maven matches server credentials in `settings.xml` and deploys the WAR to the Nexus repositories.
+5. Jenkins ──► Ansible: Jenkins runs the `ansible-playbook` command locally, targeting servers listed in the inventory.
+6. Ansible ──► Tomcat: Ansible establishes SSH sessions with Tomcat servers using security credentials to deploy the app.
+
+==============================================================
+4. DEPLOYMENT STRATEGY
+==============================================================
+- Automated CD Strategy: Fully automated using Ansible without manual intervention.
+- Stop-Replace-Start-Verify Lifecycle:
+  1. Ansible stops Tomcat on target server: `sudo systemctl stop tomcat`
+  2. Clears the previous WAR file: `/usr/local/apache-tomcat/webapps/maven-web-application.war`
+  3. Copies the newly generated WAR file to Tomcat webapps root.
+  4. Starts Tomcat: `sudo systemctl start tomcat`
+  5. Verifies app health: ping `http://<TOMCAT-IP>:8080/maven-web-application/` for a `200 OK` return code.
+
+==============================================================
+5. INFRASTRUCTURE AUTOMATION APPROACH
+==============================================================
+The infrastructure deployment and configuration management are fully declared in:
+- Inventory Configuration (`inventory`): Targets the app host IP, setting user variables (`ec2-user`) and SSH keys.
+- Deployment Script (`appdeploy.yaml`):
+  - Automatically manages OS service systemd commands to start/stop Tomcat.
+  - Uses file manipulation tools to clear directories and deploy the WAR.
+  - Automates quality validation by using `uri` modules to test web responses.
+  - Ensures a standard, repeatable environment across development and production environments.
+
+==============================================================
+6. FAILURE HANDLING STRATEGY
+==============================================================
+- Quality Gate Failures: Pipeline aborts before compilation. Old version stays online.
+- Compilation/Test Failures: Jenkins sends alerts via `emailext` and aborts.
+- Deployment Errors: If Tomcat does not return HTTP 200 on health checks, Ansible fails the deployment step.
+- Rollback Strategy:
+  - Jenkins Rollback: Re-run a previous successful Jenkins build using the "Replay" feature.
+  - Git Rollback: Commit a `git revert` on the repository, which triggers the pipeline to rebuild and deploy the last stable commit.
+==============================================================

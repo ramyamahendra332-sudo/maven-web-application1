@@ -1,0 +1,68 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+    - name: Create tomcat systemd service file
+      copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat 9 Web Application Container
+          After=network.target
+
+          [Service]
+          Type=forking
+          User=tomcat
+          Group=tomcat
+          Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64"
+          ExecStart=/usr/local/apache-tomcat/bin/startup.sh
+          ExecStop=/usr/local/apache-tomcat/bin/shutdown.sh
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Ensure correct ownership of Tomcat directory
+      file:
+        path: /usr/local/apache-tomcat
+        owner: tomcat
+        group: tomcat
+        recurse: yes
+
+    - name: stop tomcat
+      systemd:
+        name: tomcat
+        state: stopped
+      ignore_errors: yes
+
+    - name: delete old application package
+      file:
+        path: /usr/local/apache-tomcat/webapps/maven-web-application.war
+        state: absent
+
+    - name: copy application package
+      copy:
+        src: target/maven-web-application.war
+        dest: /usr/local/apache-tomcat/webapps/maven-web-application.war
+        owner: tomcat
+        group: tomcat
+
+    - name: start tomcat
+      systemd:
+        name: tomcat
+        state: started
+        enabled: yes
+
+    - name: Pause for 1 Minute and continue with play
+      pause:
+        minutes: 1
+
+    - name: Confirm that 200 OK response is returned
+      uri:
+        url: "http://{{ ansible_host }}:8080/maven-web-application/"
+        status_code: 200    
+...
