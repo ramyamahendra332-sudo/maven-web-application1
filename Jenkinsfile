@@ -1,78 +1,50 @@
 pipeline {
-    // Jenkins CI/CD pipeline for maven-web-application - all 4 stages as per docx
-
     agent any
-
+    
     tools {
-        maven 'maven3.8.2'
+        maven 'MAVEN_HOME'     // ← This is what Jenkins suggested, so it should exist
     }
-
-    triggers {
-        pollSCM('* * * * *')
-    }
-
-    options {
-        timestamps()
-        buildDiscarder(logRotator(numToKeepStr: '5', artifactNumToKeepStr: '5'))
-    }
-
+    
     stages {
-
-        stage('CheckOutCode') {
+        stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/ramyamahendra332-sudo/maven-web-application1.git'
+                git branch: 'main',
+                    url: 'https://github.com/ramyamahendra332-sudo/maven-web-application1.git'
             }
         }
-
+        
+        stage('Build') {
+            steps {
+                bat 'mvn clean package'   // Better than just compile
+            }
+        }
+        
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh 'mvn clean sonar:sonar -Dsonar.login=admin -Dsonar.password=Jeevan0024'
+                withSonarQubeEnv('SonarQube-Server') {
+                    bat 'mvn sonar:sonar'
                 }
             }
         }
-
+        
         stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 2, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
-
-        stage('Build') {
-            steps {
-                sh 'mvn clean package'
-            }
-        }
-
-        /*
-        stage('Upload To Nexus') {
-            steps {
-                sh 'mvn clean deploy'
-            }
-        }
-        */
-
-        stage('Deploy via Ansible') {
-            steps {
-                sh 'ansible-playbook -i inventory appdeploy.yaml'
-            }
-        }
-
     }
-
+    
     post {
+        always {
+            echo 'Pipeline finished'
+        }
         success {
-            emailext to: 'admin@example.com',
-                subject: "Build #${env.BUILD_NUMBER} SUCCESS",
-                body: "Pipeline completed successfully. Build: ${env.BUILD_NUMBER}"
+            echo '✅ Build Successful'
         }
         failure {
-            emailext to: 'admin@example.com',
-                subject: "Build #${env.BUILD_NUMBER} FAILED",
-                body: "Pipeline failed at stage. Check Jenkins logs. Build: ${env.BUILD_NUMBER}"
+            echo '❌ Build Failed'
         }
     }
-
 }
