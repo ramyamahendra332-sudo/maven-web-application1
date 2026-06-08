@@ -20,7 +20,7 @@ pipeline {
 
         stage('CheckOutCode') {
             steps {
-                git branch: 'main', url: 'https://github.com/jeevan0024/maven-web-application.git'
+                git branch: 'main', url: 'https://github.com/ramyamahendra332-sudo/maven-web-application1.git'
             }
         }
 
