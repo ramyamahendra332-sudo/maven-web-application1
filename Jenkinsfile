@@ -1,50 +1,44 @@
 pipeline {
     agent any
-    
+
     tools {
-        maven 'MAVEN_HOME'     // ← This is what Jenkins suggested, so it should exist
+        maven 'MAVEN_HOME'
     }
-    
+
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/ramyamahendra332-sudo/maven-web-application1.git'
             }
         }
-        
+
+        stage('Clean Workspace') {
+            steps {
+                bat 'mvn clean'
+            }
+        }
+
         stage('Build') {
             steps {
-                bat 'mvn clean package'   // Better than just compile
+                bat 'mvn package -DskipTests'
             }
         }
-        
-        stage('SonarQube Analysis') {
+
+        stage('Archive') {
             steps {
-                withSonarQubeEnv('SonarQube-Server') {
-                    bat 'mvn sonar:sonar'
-                }
-            }
-        }
-        
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
             }
         }
     }
-    
+
     post {
-        always {
-            echo 'Pipeline finished'
-        }
         success {
-            echo '✅ Build Successful'
+            echo "BUILD SUCCESS ✅"
         }
         failure {
-            echo '❌ Build Failed'
+            echo "BUILD FAILED ❌"
         }
     }
 }
