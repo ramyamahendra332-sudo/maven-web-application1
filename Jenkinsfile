@@ -1,44 +1,44 @@
 pipeline {
     agent any
-
-    tools {
-        maven 'MAVEN_HOME'
-    }
-
+    
     stages {
-
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/ramyamahendra332-sudo/maven-web-application1.git'
+                checkout scm
             }
         }
-
-        stage('Clean Workspace') {
-            steps {
-                bat 'mvn clean'
-            }
-        }
-
+        
         stage('Build') {
             steps {
-                bat 'mvn package -DskipTests'
+                withMaven(maven: '#9') {   // ← Using the name you gave
+                    bat 'mvn clean package -DskipTests'
+                }
             }
         }
-
-        stage('Archive') {
+        
+        stage('Test') {
             steps {
-                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+                withMaven(maven: '#9') {
+                    bat 'mvn test'
+                }
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
             }
         }
+        
+        // Add SonarQube stages back if needed
     }
-
+    
     post {
         success {
-            echo "BUILD SUCCESS ✅"
+            archiveArtifacts artifacts: 'target/*.war', allowEmptyArchive: true
+            echo '✅ Build Successful!'
         }
         failure {
-            echo "BUILD FAILED ❌"
+            echo '❌ Build Failed'
         }
     }
 }
